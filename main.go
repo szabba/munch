@@ -8,8 +8,7 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/fsnotify/fsnotify"
-
+	"github.com/fstab/grok_exporter/tailer"
 	"github.com/gorilla/websocket"
 )
 
@@ -21,6 +20,7 @@ func main() {
 			CheckOrigin:     func(_ *http.Request) bool { return true },
 		},
 	}
+	log.Printf("listening on %q", ":8080")
 	err := http.ListenAndServe(":8080", h)
 	if err != nil {
 		log.Print(err)
@@ -39,23 +39,22 @@ func (h *EventStreamingHandler) ServeHTTP(w http.ResponseWriter, r *http.Request
 	}
 	defer conn.Close()
 
-	watch, err := fsnotify.NewWatcher()
-	if err != nil {
-		log.Print(err)
-		return
-	}
-	defer watch.Close()
+	const (
+		readAll       = true
+		failOnMissing = false
+	)
+	tail := tailer.RunFseventFileTailer("./log", readAll, failOnMissing, nil)
+	defer tail.Close()
 
-	logErr(watch.Add("."))
-	h.streamEvents(conn, watch)
+	h.streamEvents(conn, tail)
 }
 
-func (h *EventStreamingHandler) streamEvents(conn *websocket.Conn, watch *fsnotify.Watcher) {
+func (h *EventStreamingHandler) streamEvents(conn *websocket.Conn, tail tailer.Tailer) {
 	for {
 		select {
-		case err := <-watch.Errors:
+		case err := <-tail.Errors():
 			conn.WriteJSON(err.Error())
-		case evt := <-watch.Events:
+		case evt := <-tail.Lines():
 			conn.WriteJSON(evt)
 		}
 	}
