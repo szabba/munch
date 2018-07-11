@@ -9,19 +9,26 @@ import (
 	"net/http"
 
 	"github.com/fstab/grok_exporter/tailer"
+	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
 )
 
+const addr = ":8080"
+
 func main() {
-	h := &EventStreamingHandler{
-		upgrader: websocket.Upgrader{
-			ReadBufferSize:  0,
-			WriteBufferSize: 1024,
-			CheckOrigin:     func(_ *http.Request) bool { return true },
-		},
+	upgrader := websocket.Upgrader{
+		ReadBufferSize:  0,
+		WriteBufferSize: 1024,
+		CheckOrigin:     func(_ *http.Request) bool { return true },
 	}
-	log.Printf("listening on %q", ":8080")
-	err := http.ListenAndServe(":8080", h)
+
+	eventStreamingHandler := NewEventStreamingHandler(upgrader)
+
+	router := mux.NewRouter()
+	router.Path("/events").Handler(eventStreamingHandler)
+
+	log.Printf("listening on %q", addr)
+	err := http.ListenAndServe(addr, router)
 	if err != nil {
 		log.Print(err)
 	}
@@ -29,6 +36,10 @@ func main() {
 
 type EventStreamingHandler struct {
 	upgrader websocket.Upgrader
+}
+
+func NewEventStreamingHandler(upgrader websocket.Upgrader) *EventStreamingHandler {
+	return &EventStreamingHandler{upgrader}
 }
 
 func (h *EventStreamingHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
