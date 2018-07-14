@@ -6,32 +6,59 @@ package main
 
 import (
 	"log"
+	"net"
 	"net/http"
+	"os"
+	"os/signal"
 
 	"github.com/fstab/grok_exporter/tailer"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
+	"github.com/oklog/run"
 )
 
-const addr = ":8080"
-
 func main() {
+	addr := ":8080"
+	l, err := net.Listen("tcp", addr)
+	if err != nil {
+		log.Printf("failed to listen at %s: %s", addr, err)
+		return
+	}
+	log.Printf("listening on %q", addr)
+
+	var group run.Group
+	{
+		router := setUpRouter()
+		group.Add(
+			func() error { return http.Serve(l, router) },
+			func(err error) { logErr(l.Close(), log.Print) })
+	}
+	{
+		sigs := make(chan os.Signal)
+		signal.Notify(sigs, os.Interrupt)
+		group.Add(
+			func() error {
+				<-sigs
+				log.Print("process interrupted")
+				return nil
+			},
+			func(err error) {})
+	}
+	logErr(group.Run(), log.Fatal)
+}
+
+func setUpRouter() *mux.Router {
 	upgrader := websocket.Upgrader{
 		ReadBufferSize:  0,
 		WriteBufferSize: 1024,
 		CheckOrigin:     func(_ *http.Request) bool { return true },
 	}
 
-	eventStreamingHandler := NewEventStreamingHandler(upgrader)
+	h := NewEventStreamingHandler(upgrader)
 
-	router := mux.NewRouter()
-	router.Path("/events").Handler(eventStreamingHandler)
-
-	log.Printf("listening on %q", addr)
-	err := http.ListenAndServe(addr, router)
-	if err != nil {
-		log.Print(err)
-	}
+	r := mux.NewRouter()
+	r.Path("/events").Handler(h)
+	return r
 }
 
 type EventStreamingHandler struct {
@@ -71,9 +98,9 @@ func (h *EventStreamingHandler) streamEvents(conn *websocket.Conn, tail tailer.T
 	}
 }
 
-func logErr(err error) {
+func logErr(err error, logF func(...interface{})) {
 	if err == nil {
 		return
 	}
-	log.Print(err)
+	logF(err)
 }

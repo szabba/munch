@@ -26,6 +26,12 @@
   version = "v1.2.0"
 
 [[projects]]
+  name = "github.com/oklog/run"
+  packages = ["."]
+  revision = "4dadeb3030eda0273a12382bb2348ffc7c9d1a39"
+  version = "v1.0.0"
+
+[[projects]]
   branch = "master"
   name = "github.com/szabba/assert"
   packages = ["."]
@@ -40,6 +46,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "05f72d71a1548a178f15eeb69a6c7b790735c09fda1d3c5e4b2144b7e936d03e"
+  inputs-digest = "4e629c88caad5eb661905ea64e3cf833e93d2f6a1b2e7c69676a802a2a40e9b9"
   solver-name = "gps-cdcl"
   solver-version = 1
