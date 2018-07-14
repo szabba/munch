@@ -12,7 +12,6 @@ import (
 	"os/signal"
 
 	"github.com/fstab/grok_exporter/tailer"
-	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
 	"github.com/oklog/run"
 )
@@ -28,9 +27,9 @@ func main() {
 
 	var group run.Group
 	{
-		router := setUpRouter()
+		h := setUpHandler()
 		group.Add(
-			func() error { return http.Serve(l, router) },
+			func() error { return http.Serve(l, h) },
 			func(err error) { logErr(l.Close(), log.Print) })
 	}
 	{
@@ -47,29 +46,25 @@ func main() {
 	logErr(group.Run(), log.Fatal)
 }
 
-func setUpRouter() *mux.Router {
+func setUpHandler() *SocketHandler {
 	upgrader := websocket.Upgrader{
 		ReadBufferSize:  0,
 		WriteBufferSize: 1024,
 		CheckOrigin:     func(_ *http.Request) bool { return true },
 	}
 
-	h := NewEventStreamingHandler(upgrader)
-
-	r := mux.NewRouter()
-	r.Path("/events").Handler(h)
-	return r
+	return NewSocketHandler(upgrader)
 }
 
-type EventStreamingHandler struct {
+type SocketHandler struct {
 	upgrader websocket.Upgrader
 }
 
-func NewEventStreamingHandler(upgrader websocket.Upgrader) *EventStreamingHandler {
-	return &EventStreamingHandler{upgrader}
+func NewSocketHandler(upgrader websocket.Upgrader) *SocketHandler {
+	return &SocketHandler{upgrader}
 }
 
-func (h *EventStreamingHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (h *SocketHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	conn, err := h.upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Print(err)
@@ -87,7 +82,7 @@ func (h *EventStreamingHandler) ServeHTTP(w http.ResponseWriter, r *http.Request
 	h.streamEvents(conn, tail)
 }
 
-func (h *EventStreamingHandler) streamEvents(conn *websocket.Conn, tail tailer.Tailer) {
+func (h *SocketHandler) streamEvents(conn *websocket.Conn, tail tailer.Tailer) {
 	for {
 		select {
 		case err := <-tail.Errors():
