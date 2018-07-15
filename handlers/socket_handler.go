@@ -5,6 +5,7 @@
 package handlers
 
 import (
+	"io"
 	"log"
 	"net/http"
 
@@ -23,17 +24,23 @@ type SubscriptionService interface {
 	Unsubscribe(munch.ClientID)
 }
 
-type SocketHandler struct {
-	upgrader websocket.Upgrader
-	ids      ClientIDFactory
-	subs     SubscriptionService
+type MessageHandler interface {
+	OnMessage(id munch.ClientID, r io.Reader)
 }
 
-func NewSocketHandler(upgrader websocket.Upgrader, ids ClientIDFactory, subs SubscriptionService) *SocketHandler {
+type SocketHandler struct {
+	upgrader   websocket.Upgrader
+	ids        ClientIDFactory
+	msgHandler MessageHandler
+	subs       SubscriptionService
+}
+
+func NewSocketHandler(upgrader websocket.Upgrader, ids ClientIDFactory, msgH MessageHandler, subs SubscriptionService) *SocketHandler {
 	return &SocketHandler{
-		upgrader: upgrader,
-		ids:      ids,
-		subs:     subs,
+		upgrader:   upgrader,
+		ids:        ids,
+		msgHandler: noopIfNil(msgH),
+		subs:       subs,
 	}
 }
 
@@ -68,7 +75,8 @@ func (h *SocketHandler) run(conn *websocket.Conn, id munch.ClientID, writes <-ch
 
 func (h *SocketHandler) readLoop(conn *websocket.Conn, id munch.ClientID) error {
 	for {
-		_, _, err := conn.NextReader()
+		_, r, err := conn.NextReader()
+		h.msgHandler.OnMessage(id, r)
 		if err != nil {
 			log.Printf("client %v read error: %s", id, err)
 			h.closeConn(conn, id)
@@ -94,3 +102,14 @@ func (h *SocketHandler) closeConn(conn *websocket.Conn, id munch.ClientID) {
 		log.Printf("client %v close error: %s", id, err)
 	}
 }
+
+func noopIfNil(mh MessageHandler) MessageHandler {
+	if mh == nil {
+		return noopMsgHandler{}
+	}
+	return mh
+}
+
+type noopMsgHandler struct{}
+
+func (_ noopMsgHandler) OnMessage(_ munch.ClientID, _ io.Reader) {}

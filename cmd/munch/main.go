@@ -35,7 +35,7 @@ func main() {
 
 	clientIDGen := new(munch.ClientIDGenerator)
 
-	sockHandler := handlers.NewSocketHandler(upgrader, clientIDGen, tailService)
+	sockHandler := handlers.NewSocketHandler(upgrader, clientIDGen, nil, tailService)
 
 	l, err := net.Listen("tcp", addr)
 	logErr(err, log.Fatal)
