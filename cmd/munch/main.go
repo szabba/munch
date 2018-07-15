@@ -9,12 +9,12 @@ import (
 	"net"
 	"net/http"
 
-	"github.com/szabba/munch"
-
 	"github.com/fstab/grok_exporter/tailer"
-
 	"github.com/gorilla/websocket"
 	"github.com/oklog/run"
+
+	"github.com/szabba/munch"
+	"github.com/szabba/munch/handlers"
 )
 
 func main() {
@@ -35,7 +35,7 @@ func main() {
 
 	clientIDGen := new(munch.ClientIDGenerator)
 
-	sockHandler := NewSocketHandler(upgrader, clientIDGen, tailService)
+	sockHandler := handlers.NewSocketHandler(upgrader, clientIDGen, tailService)
 
 	l, err := net.Listen("tcp", addr)
 	logErr(err, log.Fatal)
