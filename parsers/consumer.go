@@ -4,8 +4,8 @@
 
 package parsers
 
-import "github.com/szabba/munch/event"
+import "github.com/szabba/munch"
 
 type EventConsumer interface {
-	On(event.Event) error
+	On(munch.Event) error
 }

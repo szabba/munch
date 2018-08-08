@@ -8,7 +8,7 @@ import (
 	"bytes"
 	"time"
 
-	"github.com/szabba/munch/event"
+	"github.com/szabba/munch"
 )
 
 type Lines struct {
@@ -56,6 +56,6 @@ func (l *Lines) writeLine(p []byte, n int) (line, left []byte, n2 int) {
 
 func (l *Lines) submitEvent(msg string) error {
 	now := l.clock()
-	evt := event.Event{At: now, Message: msg}
+	evt := munch.Event{At: now, Message: msg}
 	return l.cons.On(evt)
 }

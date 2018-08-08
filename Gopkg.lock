@@ -2,38 +2,53 @@
 
 
 [[projects]]
+  digest = "1:3a36e477b920bf87da5845d9a86227996446fa522f91b9c63f53e9b16cad8c0a"
   name = "github.com/fstab/grok_exporter"
   packages = ["tailer"]
+  pruneopts = ""
   revision = "62d82f874a458953addc654a674680a896a291fc"
   version = "v0.2.5"
 
 [[projects]]
+  digest = "1:64d212c703a2b94054be0ce470303286b177ad260b2f89a307e3d1bb6c073ef6"
   name = "github.com/gorilla/websocket"
   packages = ["."]
+  pruneopts = ""
   revision = "ea4d1f681babbce9545c9c5f3d5194a789c89f5b"
   version = "v1.2.0"
 
 [[projects]]
+  digest = "1:94e9081cc450d2cdf4e6886fc2c06c07272f86477df2d74ee5931951fa3d2577"
   name = "github.com/oklog/run"
   packages = ["."]
+  pruneopts = ""
   revision = "4dadeb3030eda0273a12382bb2348ffc7c9d1a39"
   version = "v1.0.0"
 
 [[projects]]
   branch = "master"
+  digest = "1:2aed81199df31595370bfaed56c70d6ab57678e086936061df05c083977cbfa6"
   name = "github.com/szabba/assert"
   packages = ["."]
+  pruneopts = ""
   revision = "8a229384affe0fafd7b75cbccdb4a6f59a77f8b1"
 
 [[projects]]
   branch = "master"
+  digest = "1:d4ed2b440d723f7c1b38831d0313d3e0f55c5939f4eebb7dc3a89bcb6129a8df"
   name = "golang.org/x/exp"
   packages = ["winfsnotify"]
+  pruneopts = ""
   revision = "14dda7b62fcdb381624aaca63b04df07203856d4"
 
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "e6bae9291e619b7320b10206e457659745ce0a8aaeb8979392ae254d06320cca"
+  input-imports = [
+    "github.com/fstab/grok_exporter/tailer",
+    "github.com/gorilla/websocket",
+    "github.com/oklog/run",
+    "github.com/szabba/assert",
+  ]
   solver-name = "gps-cdcl"
   solver-version = 1

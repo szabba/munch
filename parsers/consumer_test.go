@@ -7,7 +7,7 @@ package parsers_test
 import (
 	"time"
 
-	"github.com/szabba/munch/event"
+	"github.com/szabba/munch"
 )
 
 func stepClock(start time.Time, dt time.Duration) func() time.Time {
@@ -21,10 +21,10 @@ func stepClock(start time.Time, dt time.Duration) func() time.Time {
 
 type SliceConsumer struct {
 	err  error
-	evts []event.Event
+	evts []munch.Event
 }
 
-func (sc *SliceConsumer) On(evt event.Event) error {
+func (sc *SliceConsumer) On(evt munch.Event) error {
 	if sc.err != nil {
 		return sc.err
 	}
@@ -36,4 +36,4 @@ func (sc *SliceConsumer) SetError(err error) { sc.err = err }
 
 func (sc *SliceConsumer) Len() int { return len(sc.evts) }
 
-func (sc *SliceConsumer) Event(i int) event.Event { return sc.evts[i] }
+func (sc *SliceConsumer) Event(i int) munch.Event { return sc.evts[i] }
