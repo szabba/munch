@@ -13,9 +13,48 @@ import (
 	"github.com/szabba/munch/notification"
 )
 
+const Message = "msg"
+
+var ClientID = new(munch.ClientIDGenerator).NextID()
+
 func TestServiceSendsBroadcastToSubscribedClient(t *testing.T) {
 	// given
 	service := notification.NewService()
+	defer service.Close()
+
+	sink := make(chan interface{}, 1)
+
+	service.Subscribe(ClientID, sink)
+	defer service.Unsubscribe(ClientID)
+
+	// when
+	service.Broadcast(Message)
+
+	// then
+	assertGotStringMessage(t, sink, Message)
+}
+
+func TestServiceDoesNotSendBroadcastToUnsubscribedClient(t *testing.T) {
+	// given
+	service := notification.NewService()
+	defer service.Close()
+
+	sink := make(chan interface{}, 1)
+
+	service.Subscribe(ClientID, sink)
+	service.Unsubscribe(ClientID)
+
+	// when
+	service.Broadcast(Message)
+
+	// then
+	assertNoMessagesSent(t, sink)
+}
+
+func TestServiceSendsTargetedMessageToTheAddressee(t *testing.T) {
+	// given
+	service := notification.NewService()
+	defer service.Close()
 
 	idGenerator := new(munch.ClientIDGenerator)
 	id := idGenerator.NextID()
@@ -26,18 +65,39 @@ func TestServiceSendsBroadcastToSubscribedClient(t *testing.T) {
 	defer service.Unsubscribe(id)
 
 	// when
-	service.Broadcast(msg)
-	rawMsgReceived := <-sink
+	service.Send(id, msg)
 
 	// then
-	msgReceived, isString := rawMsgReceived.(string)
-	assert.That(isString, t.Fatalf, "got message of type %T, want %T", rawMsgReceived, msg)
-	assert.That(msgReceived == msg, t.Errorf, "got message %q, want %q", msgReceived, msg)
+	assertGotStringMessage(t, sink, Message)
 }
 
-func TestServiceDoesNotSentBroadcastToUnsubscribedClient(t *testing.T) {
+func TestServiceDoesNotSendTargtedMessageToADifferentSubscribedClient(t *testing.T) {
 	// given
 	service := notification.NewService()
+	defer service.Close()
+
+	idGenerator := new(munch.ClientIDGenerator)
+	dstID, nonDstID := idGenerator.NextID(), idGenerator.NextID()
+	dst := make(chan interface{}, 1)
+	nonDst := make(chan interface{}, 1)
+
+	service.Subscribe(dstID, dst)
+	defer service.Unsubscribe(dstID)
+	service.Subscribe(nonDstID, nonDst)
+	defer service.Unsubscribe(nonDstID)
+
+	// when
+	service.Send(dstID, Message)
+
+	// then
+	assertGotStringMessage(t, dst, Message)
+	assertNoMessagesSent(t, nonDst)
+}
+
+func TestServiceDoesNotSendTargetedMessageToAnUnsubscribedClient(t *testing.T) {
+	// given
+	service := notification.NewService()
+	defer service.Close()
 
 	idGenerator := new(munch.ClientIDGenerator)
 	id := idGenerator.NextID()
@@ -48,20 +108,16 @@ func TestServiceDoesNotSentBroadcastToUnsubscribedClient(t *testing.T) {
 	service.Unsubscribe(id)
 
 	// when
-	service.Broadcast(msg)
-	msgCount := len(sink)
+	service.Send(id, msg)
 
 	// then
-	assert.That(msgCount == 0, t.Errorf, "got %d messages in channel, wanted %d", msgCount, 0)
-	for i := 0; i < msgCount; i++ {
-		msg := <-sink
-		t.Logf("unexpected message: %#v", msg)
-	}
+	assertNoMessagesSent(t, sink)
 }
 
 func TestServiceClosesSinkWhenUnsubscribingItsClient(t *testing.T) {
 	// given
 	service := notification.NewService()
+	defer service.Close()
 
 	idGenerator := new(munch.ClientIDGenerator)
 	id := idGenerator.NextID()
@@ -73,17 +129,13 @@ func TestServiceClosesSinkWhenUnsubscribingItsClient(t *testing.T) {
 	service.Unsubscribe(id)
 
 	// then
-	isOpen := false
-	select {
-	case _, isOpen = <-sink:
-	default:
-	}
-	assert.That(!isOpen, t.Errorf, "the sink was not closed")
+	assertChannelWasClosed(t, sink)
 }
 
 func TestServiceClosesSinkWhenStoping(t *testing.T) {
 	// given
 	service := notification.NewService()
+	defer service.Close()
 
 	idGenerator := new(munch.ClientIDGenerator)
 	id := idGenerator.NextID()
@@ -95,10 +147,42 @@ func TestServiceClosesSinkWhenStoping(t *testing.T) {
 	service.Close()
 
 	// then
-	isOpen := false
+	assertChannelWasClosed(t, sink)
+}
+
+func assertGotStringMessage(t *testing.T, ch chan interface{}, wantMsg string) {
+	t.Helper()
+
+	var rawMsg interface{}
 	select {
-	case _, isOpen = <-sink:
+	case rawMsg = <-ch:
 	default:
 	}
-	assert.That(!isOpen, t.Errorf, "the sink was not closed")
+
+	msgGot, isString := rawMsg.(string)
+	assert.That(isString, t.Fatalf, "got message of type %T, want %T", rawMsg, Message)
+	assert.That(msgGot == Message, t.Errorf, "got message %q, want %q", msgGot, Message)
+}
+
+func assertNoMessagesSent(t *testing.T, ch chan interface{}) {
+	t.Helper()
+
+	msgCount := len(ch)
+	assert.That(msgCount == 0, t.Errorf, "got %d messages in channel, wanted %d", msgCount, 0)
+	for i := 0; i < msgCount; i++ {
+		msg := <-ch
+		t.Logf("unexpected message: %#v", msg)
+	}
+}
+
+func assertChannelWasClosed(t *testing.T, ch chan interface{}) {
+	t.Helper()
+
+	isOpen := false
+	select {
+	case _, isOpen = <-ch:
+	default:
+	}
+
+	assert.That(!isOpen, t.Errorf, "the channel was not closed")
 }
