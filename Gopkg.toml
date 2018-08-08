@@ -5,10 +5,6 @@
   name = "github.com/fstab/grok_exporter"
   version = "0.2.5"
 
-# [[constraint]]
-#   name = "github.com/gorilla/mux"
-#   version = "1.6.2"
-
 [[constraint]]
   name = "github.com/gorilla/websocket"
   version = "1.2.0"
