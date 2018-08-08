@@ -53,9 +53,52 @@ func TestServiceDoesNotSentBroadcastToUnsubscribedClient(t *testing.T) {
 
 	// then
 	assert.That(msgCount == 0, t.Errorf, "got %d messages in channel, wanted %d", msgCount, 0)
-	close(sink)
 	for i := 0; i < msgCount; i++ {
 		msg := <-sink
 		t.Logf("unexpected message: %#v", msg)
 	}
+}
+
+func TestServiceClosesSinkWhenUnsubscribingItsClient(t *testing.T) {
+	// given
+	service := notification.NewService()
+
+	idGenerator := new(munch.ClientIDGenerator)
+	id := idGenerator.NextID()
+	sink := make(chan interface{}, 1)
+
+	service.Subscribe(id, sink)
+
+	// when
+	service.Unsubscribe(id)
+
+	// then
+	isOpen := false
+	select {
+	case _, isOpen = <-sink:
+	default:
+	}
+	assert.That(!isOpen, t.Errorf, "the sink was not closed")
+}
+
+func TestServiceClosesSinkWhenStoping(t *testing.T) {
+	// given
+	service := notification.NewService()
+
+	idGenerator := new(munch.ClientIDGenerator)
+	id := idGenerator.NextID()
+	sink := make(chan interface{}, 1)
+
+	service.Subscribe(id, sink)
+
+	// when
+	service.Close()
+
+	// then
+	isOpen := false
+	select {
+	case _, isOpen = <-sink:
+	default:
+	}
+	assert.That(!isOpen, t.Errorf, "the sink was not closed")
 }
