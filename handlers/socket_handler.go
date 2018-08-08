@@ -5,6 +5,7 @@
 package handlers
 
 import (
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -86,14 +87,20 @@ func (h *SocketHandler) readLoop(conn *websocket.Conn, id munch.ClientID) error 
 }
 
 func (h *SocketHandler) writeLoop(conn *websocket.Conn, id munch.ClientID, writes <-chan interface{}) error {
-	for w := range writes {
-		err := conn.WriteJSON(w)
+	for msg := range writes {
+		err := h.writeMsg(conn, msg)
 		if err != nil {
 			log.Printf("client %v write error: %s", id, err)
 			return err
 		}
 	}
 	return nil
+}
+
+func (h *SocketHandler) writeMsg(conn *websocket.Conn, msg interface{}) error {
+	wrapped := make(map[string]interface{})
+	wrapped[fmt.Sprintf("%T", msg)] = msg
+	return conn.WriteJSON(wrapped)
 }
 
 func (h *SocketHandler) closeConn(conn *websocket.Conn, id munch.ClientID) {
