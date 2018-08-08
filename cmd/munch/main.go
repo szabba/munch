@@ -9,6 +9,8 @@ import (
 	"net"
 	"net/http"
 
+	"github.com/szabba/munch/notification"
+
 	"github.com/fstab/grok_exporter/tailer"
 	"github.com/gorilla/websocket"
 	"github.com/oklog/run"
@@ -25,7 +27,10 @@ func main() {
 	tail := NewFSTailer()
 	defer tail.Close()
 
-	tailService := NewTailService(tail)
+	notifSvc := notification.NewService()
+	defer notifSvc.Close()
+
+	tailService := NewTailService(tail, notifSvc)
 
 	upgrader := websocket.Upgrader{
 		ReadBufferSize:  1024,
@@ -35,7 +40,7 @@ func main() {
 
 	clientIDGen := new(munch.ClientIDGenerator)
 
-	sockHandler := handlers.NewSocketHandler(upgrader, clientIDGen, nil, tailService)
+	sockHandler := handlers.NewSocketHandler(upgrader, clientIDGen, nil, notifSvc)
 
 	l, err := net.Listen("tcp", addr)
 	logErr(err, log.Fatal)

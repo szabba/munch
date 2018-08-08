@@ -14,36 +14,37 @@ import (
 	"github.com/szabba/munch"
 )
 
+type BroadcastService interface {
+	Broadcast(msg interface{})
+}
+
 type TailService struct {
 	lock sync.Mutex
 	once sync.Once
 
 	tail    tailer.Tailer
+	cast    BroadcastService
 	clients map[munch.ClientID]chan<- interface{}
 }
 
-func NewTailService(tail tailer.Tailer) *TailService {
+func NewTailService(tail tailer.Tailer, cast BroadcastService) *TailService {
 	return &TailService{
 		tail:    tail,
+		cast:    cast,
 		clients: make(map[munch.ClientID]chan<- interface{}),
 	}
 }
 
 func (t *TailService) Stop() {
 	t.tail.Close()
-
-	t.lock.Lock()
-	defer t.lock.Unlock()
-	for id := range t.clients {
-		t.unsubscribe(id)
-	}
 }
 
 func (t *TailService) Run() error {
 	for {
 		select {
 		case err := <-t.tail.Errors():
-			// TODO: broadcast the error to the UI too
+			// TODO: specify an encoding
+			t.cast.Broadcast(err)
 			return err
 		case line, ok := <-t.tail.Lines():
 			if !ok {
@@ -56,53 +57,9 @@ func (t *TailService) Run() error {
 }
 
 func (t *TailService) sendLine(line string) {
-	t.broadcast(munch.Event{
+	t.cast.Broadcast(munch.Event{
 		Source:  "tail",
 		At:      time.Now(),
 		Message: line,
 	})
-}
-
-func (t *TailService) broadcast(m interface{}) {
-	t.lock.Lock()
-	defer t.lock.Unlock()
-
-	log.Printf("broadcasting %v", m)
-
-	for _, sink := range t.clients {
-		if sink != nil {
-			sink <- m
-		}
-	}
-}
-
-func (t *TailService) Subscribe(id munch.ClientID, sink chan<- interface{}) {
-	t.lock.Lock()
-	defer t.lock.Unlock()
-
-	_, registered := t.clients[id]
-	if registered {
-		log.Fatalf("duplicate registration of client %v", id)
-		return
-	}
-
-	log.Printf("registering client %v", id)
-	t.clients[id] = sink
-}
-
-func (t *TailService) Unsubscribe(id munch.ClientID) {
-	t.lock.Lock()
-	defer t.lock.Unlock()
-
-	t.unsubscribe(id)
-}
-
-func (t *TailService) unsubscribe(id munch.ClientID) {
-	sink, registered := t.clients[id]
-	if !registered {
-		return
-	}
-	log.Printf("unregistering client %v", id)
-	close(sink)
-	delete(t.clients, id)
 }
