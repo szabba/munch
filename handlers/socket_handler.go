@@ -25,22 +25,28 @@ type SubscriptionService interface {
 	Unsubscribe(munch.ClientID)
 }
 
-type MessageHandler interface {
+type OnMessager interface {
 	OnMessage(id munch.ClientID, r io.Reader)
 }
 
 type SocketHandler struct {
 	upgrader   websocket.Upgrader
 	ids        ClientIDFactory
-	msgHandler MessageHandler
+	msgHandler OnMessager
 	subs       SubscriptionService
 }
 
-func NewSocketHandler(upgrader websocket.Upgrader, ids ClientIDFactory, msgH MessageHandler, subs SubscriptionService) *SocketHandler {
+func NewSocketHandler(
+	upgrader websocket.Upgrader,
+	ids ClientIDFactory,
+	onMsg OnMessager,
+	subs SubscriptionService,
+) *SocketHandler {
+
 	return &SocketHandler{
 		upgrader:   upgrader,
 		ids:        ids,
-		msgHandler: noopIfNil(msgH),
+		msgHandler: onMsg,
 		subs:       subs,
 	}
 }
@@ -109,14 +115,3 @@ func (h *SocketHandler) closeConn(conn *websocket.Conn, id munch.ClientID) {
 		log.Printf("client %v close error: %s", id, err)
 	}
 }
-
-func noopIfNil(mh MessageHandler) MessageHandler {
-	if mh == nil {
-		return noopMsgHandler{}
-	}
-	return mh
-}
-
-type noopMsgHandler struct{}
-
-func (_ noopMsgHandler) OnMessage(_ munch.ClientID, _ io.Reader) {}
