@@ -29,21 +29,21 @@ type OnMessager interface {
 	OnMessage(id munch.ClientID, r io.Reader)
 }
 
-type SocketHandler struct {
+type Socket struct {
 	upgrader   websocket.Upgrader
 	ids        ClientIDFactory
 	msgHandler OnMessager
 	subs       SubscriptionService
 }
 
-func NewSocketHandler(
+func NewSocket(
 	upgrader websocket.Upgrader,
 	ids ClientIDFactory,
 	onMsg OnMessager,
 	subs SubscriptionService,
-) *SocketHandler {
+) *Socket {
 
-	return &SocketHandler{
+	return &Socket{
 		upgrader:   upgrader,
 		ids:        ids,
 		msgHandler: onMsg,
@@ -51,7 +51,7 @@ func NewSocketHandler(
 	}
 }
 
-func (h *SocketHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (h *Socket) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	conn, err := h.upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Print(err)
@@ -66,7 +66,7 @@ func (h *SocketHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.run(conn, id, writes)
 }
 
-func (h *SocketHandler) run(conn *websocket.Conn, id munch.ClientID, writes <-chan interface{}) {
+func (h *Socket) run(conn *websocket.Conn, id munch.ClientID, writes <-chan interface{}) {
 	var g run.Group
 
 	g.Add(
@@ -80,7 +80,7 @@ func (h *SocketHandler) run(conn *websocket.Conn, id munch.ClientID, writes <-ch
 	g.Run()
 }
 
-func (h *SocketHandler) readLoop(conn *websocket.Conn, id munch.ClientID) error {
+func (h *Socket) readLoop(conn *websocket.Conn, id munch.ClientID) error {
 	for {
 		_, r, err := conn.NextReader()
 		h.msgHandler.OnMessage(id, r)
@@ -92,7 +92,7 @@ func (h *SocketHandler) readLoop(conn *websocket.Conn, id munch.ClientID) error 
 	}
 }
 
-func (h *SocketHandler) writeLoop(conn *websocket.Conn, id munch.ClientID, writes <-chan interface{}) error {
+func (h *Socket) writeLoop(conn *websocket.Conn, id munch.ClientID, writes <-chan interface{}) error {
 	for msg := range writes {
 		if msg == nil {
 			return nil
@@ -106,13 +106,13 @@ func (h *SocketHandler) writeLoop(conn *websocket.Conn, id munch.ClientID, write
 	return nil
 }
 
-func (h *SocketHandler) writeMsg(conn *websocket.Conn, msg interface{}) error {
+func (h *Socket) writeMsg(conn *websocket.Conn, msg interface{}) error {
 	wrapped := make(map[string]interface{})
 	wrapped[fmt.Sprintf("%T", msg)] = msg
 	return conn.WriteJSON(wrapped)
 }
 
-func (h *SocketHandler) closeConn(conn *websocket.Conn, id munch.ClientID) {
+func (h *Socket) closeConn(conn *websocket.Conn, id munch.ClientID) {
 	err := conn.Close()
 	if err != nil {
 		log.Printf("client %v close error: %s", id, err)
