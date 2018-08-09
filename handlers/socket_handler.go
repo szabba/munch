@@ -94,6 +94,9 @@ func (h *SocketHandler) readLoop(conn *websocket.Conn, id munch.ClientID) error 
 
 func (h *SocketHandler) writeLoop(conn *websocket.Conn, id munch.ClientID, writes <-chan interface{}) error {
 	for msg := range writes {
+		if msg == nil {
+			return nil
+		}
 		err := h.writeMsg(conn, msg)
 		if err != nil {
 			log.Printf("client %v write error: %s", id, err)
