@@ -5,7 +5,6 @@
 package handlers
 
 import (
-	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -29,26 +28,27 @@ type OnMessager interface {
 	OnMessage(id munch.ClientID, r io.Reader)
 }
 
+type MessageFormatter interface {
+	FormatMessage(w io.Writer, msg interface{}) error
+}
+
 type Socket struct {
-	upgrader   websocket.Upgrader
-	ids        ClientIDFactory
-	msgHandler OnMessager
-	subs       SubscriptionService
+	upgrader websocket.Upgrader
+	ids      ClientIDFactory
+	onMsg    OnMessager
+	fmtr     MessageFormatter
+	subs     SubscriptionService
 }
 
 func NewSocket(
 	upgrader websocket.Upgrader,
 	ids ClientIDFactory,
 	onMsg OnMessager,
+	fmtr MessageFormatter,
 	subs SubscriptionService,
 ) *Socket {
 
-	return &Socket{
-		upgrader:   upgrader,
-		ids:        ids,
-		msgHandler: onMsg,
-		subs:       subs,
-	}
+	return &Socket{upgrader, ids, onMsg, fmtr, subs}
 }
 
 func (h *Socket) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -60,7 +60,7 @@ func (h *Socket) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer conn.Close()
 
 	id := h.ids.NextID()
-	sndr := sender{id: id, conn: conn}
+	sndr := newSender(id, h.fmtr, conn)
 	h.subs.Subscribe(id, sndr.send)
 	defer h.subs.Unsubscribe(id)
 
@@ -74,22 +74,32 @@ func (h *Socket) readLoop(id munch.ClientID, conn *websocket.Conn) {
 			log.Printf("client %s read error: %s", id, err)
 			return
 		}
-		h.msgHandler.OnMessage(id, r)
+		h.onMsg.OnMessage(id, r)
 	}
 }
 
 type sender struct {
 	lock sync.Mutex
 	id   munch.ClientID
+	fmtr MessageFormatter
 	conn *websocket.Conn
 }
 
-func (s sender) send(msg interface{}) {
+func newSender(id munch.ClientID, fmtr MessageFormatter, conn *websocket.Conn) *sender {
+	return &sender{id: id, conn: conn, fmtr: fmtr}
+}
+
+func (s *sender) send(msg interface{}) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
-	payload := []byte(fmt.Sprint(msg))
-	err := s.conn.WriteMessage(websocket.TextMessage, payload)
+	w, err := s.conn.NextWriter(websocket.TextMessage)
+	if err != nil {
+		log.Printf("client %s write error: %s", s.id, err)
+		return
+	}
+	defer w.Close()
+	err = s.fmtr.FormatMessage(w, msg)
 	if err != nil {
 		log.Printf("client %s write error: %s", s.id, err)
 	}

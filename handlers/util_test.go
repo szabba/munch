@@ -6,6 +6,7 @@ package handlers_test
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 
 	"github.com/szabba/munch"
@@ -30,3 +31,30 @@ func (capt *CaptureHandler) OnMessage(id munch.ClientID, r io.Reader) {
 func (capt *CaptureHandler) WasCalled() bool     { return capt.wasCalled }
 func (capt *CaptureHandler) ID() munch.ClientID  { return capt.id }
 func (capt *CaptureHandler) MessageText() string { return capt.buf.String() }
+
+type SprintFormatter struct{}
+
+var _ handlers.MessageFormatter = SprintFormatter{}
+
+func (fmtr SprintFormatter) FormatMessage(w io.Writer, msg interface{}) error {
+	_, err := fmt.Fprint(w, msg)
+	return err
+}
+
+type CaptureFormatter struct {
+	wasCalled bool
+	nested    handlers.MessageFormatter
+}
+
+var _ handlers.MessageFormatter = new(CaptureFormatter)
+
+func NewCaptureFormatter(nested handlers.MessageFormatter) *CaptureFormatter {
+	return &CaptureFormatter{nested: nested}
+}
+
+func (fmtr *CaptureFormatter) FormatMessage(w io.Writer, msg interface{}) error {
+	fmtr.wasCalled = true
+	return fmtr.nested.FormatMessage(w, msg)
+}
+
+func (fmtr *CaptureFormatter) WasCalled() bool { return fmtr.wasCalled }

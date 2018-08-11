@@ -26,7 +26,7 @@ func TestSocketSubscribesAndUsubscribesClient(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	srv, _, subsMock := startMockServer(ctrl)
+	srv, _, subsMock := startMockServer(ctrl, SprintFormatter{})
 	defer srv.Close()
 
 	clientID := munch.ClientIDOf(0)
@@ -46,7 +46,7 @@ func TestSocketPassesClientMessageToHandler(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	srv, onMsgMock, subsMock := startMockServer(ctrl)
+	srv, onMsgMock, subsMock := startMockServer(ctrl, SprintFormatter{})
 	defer srv.Close()
 
 	clientID := munch.ClientIDOf(0)
@@ -80,7 +80,8 @@ func TestSocketLetsTheSubscriptionServiceSendMessagesToTheClient(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	srv, _, subsMock := startMockServer(ctrl)
+	fmtr := NewCaptureFormatter(SprintFormatter{})
+	srv, _, subsMock := startMockServer(ctrl, fmtr)
 	defer srv.Close()
 
 	clientID := munch.ClientIDOf(0)
@@ -107,21 +108,34 @@ func TestSocketLetsTheSubscriptionServiceSendMessagesToTheClient(t *testing.T) {
 
 	// then
 	assert.That(
+		fmtr.WasCalled(),
+		t.Errorf, "the formatter was not called")
+	assert.That(
 		string(msgGot) == "msg",
 		t.Errorf, "got message %q, want %q", msgGot, "msg")
 }
 
-func startMockServer(ctrl *gomock.Controller) (*httptest.Server, *MockOnMessager, *MockSubscriptionService) {
+func startMockServer(
+	ctrl *gomock.Controller,
+	fmtr handlers.MessageFormatter,
+) (
+	*httptest.Server, *MockOnMessager, *MockSubscriptionService,
+) {
 	onMsgMock := NewMockOnMessager(ctrl)
 	subsMock := NewMockSubscriptionService(ctrl)
-	srv := startServer(onMsgMock, subsMock)
+	srv := startServer(onMsgMock, fmtr, subsMock)
 	return srv, onMsgMock, subsMock
 }
 
-func startServer(onMsg handlers.OnMessager, subs handlers.SubscriptionService) *httptest.Server {
+func startServer(
+	onMsg handlers.OnMessager,
+	fmtr handlers.MessageFormatter,
+	subs handlers.SubscriptionService,
+) *httptest.Server {
+
 	up := websocket.Upgrader{}
 	idGen := new(munch.ClientIDGenerator)
-	h := handlers.NewSocket(up, idGen, onMsg, subs)
+	h := handlers.NewSocket(up, idGen, onMsg, fmtr, subs)
 	return httptest.NewServer(h)
 }
 
