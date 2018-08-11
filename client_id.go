@@ -11,6 +11,10 @@ import (
 
 type ClientID struct{ id int }
 
+func ClientIDOf(id int) ClientID {
+	return ClientID{id}
+}
+
 func (id ClientID) String() string { return fmt.Sprint(id.id) }
 
 type ClientIDGenerator struct {

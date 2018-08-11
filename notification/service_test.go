@@ -22,16 +22,17 @@ func TestServiceSendsBroadcastToSubscribedClient(t *testing.T) {
 	service := notification.NewService()
 	defer service.Close()
 
-	sink := make(chan interface{}, 1)
+	sender := NewTestSender(t)
 
-	service.Subscribe(ClientID, sink)
+	service.Subscribe(ClientID, sender.Send)
 	defer service.Unsubscribe(ClientID)
+	msg := "msg"
 
 	// when
-	service.Broadcast(Message)
+	service.Broadcast(msg)
 
 	// then
-	assertGotStringMessage(t, sink, Message)
+	sender.AssertGotString(msg)
 }
 
 func TestServiceDoesNotSendBroadcastToUnsubscribedClient(t *testing.T) {
@@ -39,16 +40,18 @@ func TestServiceDoesNotSendBroadcastToUnsubscribedClient(t *testing.T) {
 	service := notification.NewService()
 	defer service.Close()
 
-	sink := make(chan interface{}, 1)
+	sender := NewTestSender(t)
 
-	service.Subscribe(ClientID, sink)
+	service.Subscribe(ClientID, sender.Send)
 	service.Unsubscribe(ClientID)
 
+	msg := "msg"
+
 	// when
-	service.Broadcast(Message)
+	service.Broadcast(msg)
 
 	// then
-	assertNoMessagesSent(t, sink)
+	sender.AssertGotNothing()
 }
 
 func TestServiceSendsTargetedMessageToTheAddressee(t *testing.T) {
@@ -58,17 +61,17 @@ func TestServiceSendsTargetedMessageToTheAddressee(t *testing.T) {
 
 	idGenerator := new(munch.ClientIDGenerator)
 	id := idGenerator.NextID()
-	sink := make(chan interface{}, 1)
+	sender := NewTestSender(t)
 	msg := "msg"
 
-	service.Subscribe(id, sink)
+	service.Subscribe(id, sender.Send)
 	defer service.Unsubscribe(id)
 
 	// when
 	service.Send(id, msg)
 
 	// then
-	assertGotStringMessage(t, sink, Message)
+	sender.AssertGotString(msg)
 }
 
 func TestServiceDoesNotSendTargtedMessageToADifferentSubscribedClient(t *testing.T) {
@@ -78,20 +81,21 @@ func TestServiceDoesNotSendTargtedMessageToADifferentSubscribedClient(t *testing
 
 	idGenerator := new(munch.ClientIDGenerator)
 	dstID, nonDstID := idGenerator.NextID(), idGenerator.NextID()
-	dst := make(chan interface{}, 1)
-	nonDst := make(chan interface{}, 1)
+	dst, nonDst := NewTestSender(t), NewTestSender(t)
 
-	service.Subscribe(dstID, dst)
+	service.Subscribe(dstID, dst.Send)
 	defer service.Unsubscribe(dstID)
-	service.Subscribe(nonDstID, nonDst)
+	service.Subscribe(nonDstID, nonDst.Send)
 	defer service.Unsubscribe(nonDstID)
 
+	msg := "msg"
+
 	// when
-	service.Send(dstID, Message)
+	service.Send(dstID, msg)
 
 	// then
-	assertGotStringMessage(t, dst, Message)
-	assertNoMessagesSent(t, nonDst)
+	nonDst.AssertGotNothing()
+	dst.AssertGotString(msg)
 }
 
 func TestServiceDoesNotSendTargetedMessageToAnUnsubscribedClient(t *testing.T) {
@@ -101,88 +105,53 @@ func TestServiceDoesNotSendTargetedMessageToAnUnsubscribedClient(t *testing.T) {
 
 	idGenerator := new(munch.ClientIDGenerator)
 	id := idGenerator.NextID()
-	sink := make(chan interface{}, 1)
+	sender := NewTestSender(t)
 	msg := "msg"
 
-	service.Subscribe(id, sink)
+	service.Subscribe(id, sender.Send)
 	service.Unsubscribe(id)
 
 	// when
 	service.Send(id, msg)
 
 	// then
-	assertNoMessagesSent(t, sink)
+	sender.AssertGotNothing()
 }
 
-func TestServiceClosesSinkWhenUnsubscribingItsClient(t *testing.T) {
-	// given
-	service := notification.NewService()
-	defer service.Close()
-
-	idGenerator := new(munch.ClientIDGenerator)
-	id := idGenerator.NextID()
-	sink := make(chan interface{}, 1)
-
-	service.Subscribe(id, sink)
-
-	// when
-	service.Unsubscribe(id)
-
-	// then
-	assertChannelWasClosed(t, sink)
+type TestSender struct {
+	t       *testing.T
+	wasSent bool
+	msgGot  interface{}
 }
 
-func TestServiceClosesSinkWhenStoping(t *testing.T) {
-	// given
-	service := notification.NewService()
-	defer service.Close()
-
-	idGenerator := new(munch.ClientIDGenerator)
-	id := idGenerator.NextID()
-	sink := make(chan interface{}, 1)
-
-	service.Subscribe(id, sink)
-
-	// when
-	service.Close()
-
-	// then
-	assertChannelWasClosed(t, sink)
+func NewTestSender(t *testing.T) *TestSender {
+	return &TestSender{t: t}
 }
 
-func assertGotStringMessage(t *testing.T, ch chan interface{}, wantMsg string) {
-	t.Helper()
+func (s *TestSender) Send(msg interface{}) {
+	s.wasSent = true
+	s.msgGot = msg
+}
 
-	var rawMsg interface{}
-	select {
-	case rawMsg = <-ch:
-	default:
+func (s *TestSender) AssertGotString(msgWant string) {
+	s.t.Helper()
+
+	assert.That(s.wasSent, s.t.Errorf, "no message was sent")
+	if !s.wasSent {
+		return
 	}
 
-	msgGot, isString := rawMsg.(string)
-	assert.That(isString, t.Fatalf, "got message of type %T, want %T", rawMsg, Message)
-	assert.That(msgGot == Message, t.Errorf, "got message %q, want %q", msgGot, Message)
-}
-
-func assertNoMessagesSent(t *testing.T, ch chan interface{}) {
-	t.Helper()
-
-	msgCount := len(ch)
-	assert.That(msgCount == 0, t.Errorf, "got %d messages in channel, wanted %d", msgCount, 0)
-	for i := 0; i < msgCount; i++ {
-		msg := <-ch
-		t.Logf("unexpected message: %#v", msg)
-	}
-}
-
-func assertChannelWasClosed(t *testing.T, ch chan interface{}) {
-	t.Helper()
-
-	isOpen := false
-	select {
-	case _, isOpen = <-ch:
-	default:
+	msgGot, isString := s.msgGot.(string)
+	assert.That(isString, s.t.Errorf, "got message of type %T, want %T", s.msgGot, Message)
+	if !isString {
+		return
 	}
 
-	assert.That(!isOpen, t.Errorf, "the channel was not closed")
+	assert.That(msgGot == Message, s.t.Errorf, "got message %q, want %q", msgGot, Message)
+}
+
+func (s *TestSender) AssertGotNothing() {
+	s.t.Helper()
+
+	assert.That(!s.wasSent, s.t.Errorf, "unexpected message was sent: %#v", s.msgGot)
 }

@@ -9,9 +9,9 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"sync"
 
 	"github.com/gorilla/websocket"
-	"github.com/oklog/run"
 
 	"github.com/szabba/munch"
 )
@@ -21,7 +21,7 @@ type ClientIDFactory interface {
 }
 
 type SubscriptionService interface {
-	Subscribe(munch.ClientID, chan<- interface{})
+	Subscribe(munch.ClientID, func(interface{}))
 	Unsubscribe(munch.ClientID)
 }
 
@@ -60,61 +60,37 @@ func (h *Socket) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer conn.Close()
 
 	id := h.ids.NextID()
-	writes := make(chan interface{})
-	h.subs.Subscribe(id, writes)
+	sndr := sender{id: id, conn: conn}
+	h.subs.Subscribe(id, sndr.send)
+	defer h.subs.Unsubscribe(id)
 
-	h.run(conn, id, writes)
+	h.readLoop(id, conn)
 }
 
-func (h *Socket) run(conn *websocket.Conn, id munch.ClientID, writes <-chan interface{}) {
-	var g run.Group
-
-	g.Add(
-		func() error { return h.readLoop(conn, id) },
-		func(_ error) { conn.Close() })
-
-	g.Add(
-		func() error { return h.writeLoop(conn, id, writes) },
-		func(_ error) { h.subs.Unsubscribe(id) })
-
-	g.Run()
-}
-
-func (h *Socket) readLoop(conn *websocket.Conn, id munch.ClientID) error {
+func (h *Socket) readLoop(id munch.ClientID, conn *websocket.Conn) {
 	for {
 		_, r, err := conn.NextReader()
+		if err != nil {
+			log.Printf("client %s read error: %s", id, err)
+			return
+		}
 		h.msgHandler.OnMessage(id, r)
-		if err != nil {
-			log.Printf("client %v read error: %s", id, err)
-			h.closeConn(conn, id)
-			return err
-		}
 	}
 }
 
-func (h *Socket) writeLoop(conn *websocket.Conn, id munch.ClientID, writes <-chan interface{}) error {
-	for msg := range writes {
-		if msg == nil {
-			return nil
-		}
-		err := h.writeMsg(conn, msg)
-		if err != nil {
-			log.Printf("client %v write error: %s", id, err)
-			return err
-		}
-	}
-	return nil
+type sender struct {
+	lock sync.Mutex
+	id   munch.ClientID
+	conn *websocket.Conn
 }
 
-func (h *Socket) writeMsg(conn *websocket.Conn, msg interface{}) error {
-	wrapped := make(map[string]interface{})
-	wrapped[fmt.Sprintf("%T", msg)] = msg
-	return conn.WriteJSON(wrapped)
-}
+func (s sender) send(msg interface{}) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
 
-func (h *Socket) closeConn(conn *websocket.Conn, id munch.ClientID) {
-	err := conn.Close()
+	payload := []byte(fmt.Sprint(msg))
+	err := s.conn.WriteMessage(websocket.TextMessage, payload)
 	if err != nil {
-		log.Printf("client %v close error: %s", id, err)
+		log.Printf("client %s write error: %s", s.id, err)
 	}
 }

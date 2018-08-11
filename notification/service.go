@@ -8,25 +8,32 @@ import (
 	"log"
 	"sync"
 
+	"github.com/szabba/assert"
+
 	"github.com/szabba/munch"
 )
 
 type Service struct {
 	lock    sync.Mutex
-	clients map[munch.ClientID]chan<- interface{}
+	clients map[munch.ClientID]sender
+}
+
+type sender func(interface{})
+
+func (s sender) send(msg interface{}) {
+	s(msg)
 }
 
 func NewService() *Service {
 	return &Service{
-		clients: make(map[munch.ClientID]chan<- interface{}),
+		clients: make(map[munch.ClientID]sender),
 	}
 }
 
-func (srv *Service) Subscribe(id munch.ClientID, sink chan<- interface{}) {
+func (srv *Service) Subscribe(id munch.ClientID, sndr func(interface{})) {
 	srv.lock.Lock()
-	if sink != nil {
-		srv.clients[id] = sink
-	}
+	assert.That(sndr != nil, log.Panicf, "client %s registration attempted with nil sender", id)
+	srv.clients[id] = sndr
 	srv.lock.Unlock()
 }
 
@@ -34,13 +41,12 @@ func (srv *Service) Send(id munch.ClientID, msg interface{}) {
 	srv.lock.Lock()
 	defer srv.lock.Unlock()
 
-	sink := srv.clients[id]
-	if sink == nil {
+	sender := srv.clients[id]
+	if sender == nil {
 		log.Printf("got message for unubscribed client %s: %#v", id, msg)
 		return
 	}
-
-	sink <- msg
+	sender.send(msg)
 }
 
 func (srv *Service) Unsubscribe(id munch.ClientID) {
@@ -52,8 +58,8 @@ func (srv *Service) Unsubscribe(id munch.ClientID) {
 func (srv *Service) Broadcast(v interface{}) {
 	srv.lock.Lock()
 	defer srv.lock.Unlock()
-	for _, sink := range srv.clients {
-		sink <- v
+	for _, sender := range srv.clients {
+		sender.send(v)
 	}
 }
 
@@ -71,9 +77,5 @@ func (srv *Service) Close() {
 }
 
 func (srv *Service) unsubscribe(id munch.ClientID) {
-	sink := srv.clients[id]
-	if sink != nil {
-		close(sink)
-		delete(srv.clients, id)
-	}
+	delete(srv.clients, id)
 }
