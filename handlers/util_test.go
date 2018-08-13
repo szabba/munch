@@ -5,7 +5,7 @@
 package handlers_test
 
 import (
-	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 
@@ -16,21 +16,20 @@ import (
 type CaptureHandler struct {
 	wasCalled bool
 	id        munch.ClientID
-	buf       bytes.Buffer
+	msg       string
 }
 
 var _ handlers.OnMessager = new(CaptureHandler)
 
-func (capt *CaptureHandler) OnMessage(id munch.ClientID, r io.Reader) {
+func (capt *CaptureHandler) OnMessage(id munch.ClientID, msg json.RawMessage) {
 	capt.wasCalled = true
 	capt.id = id
-	capt.buf.Reset()
-	io.Copy(&capt.buf, r)
+	capt.msg = string(msg)
 }
 
 func (capt *CaptureHandler) WasCalled() bool     { return capt.wasCalled }
 func (capt *CaptureHandler) ID() munch.ClientID  { return capt.id }
-func (capt *CaptureHandler) MessageText() string { return capt.buf.String() }
+func (capt *CaptureHandler) MessageText() string { return capt.msg }
 
 type SprintFormatter struct{}
 

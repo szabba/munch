@@ -5,8 +5,8 @@
 package handlers_test
 
 import (
+	"encoding/json"
 	"reflect"
-	"strings"
 	"testing"
 
 	"github.com/szabba/assert"
@@ -30,7 +30,7 @@ func TestMuxDelegatesToMatchingHandler(t *testing.T) {
 	})
 
 	// when
-	mux.OnMessage(ClientID, strings.NewReader(`{"handlers_test.MsgA": {}}`))
+	mux.OnMessage(ClientID, json.RawMessage(`{"handlers_test.MsgA": {}}`))
 
 	// then
 	assert.That(matching.WasCalled(), t.Fatalf, "matching handler was not called")
@@ -50,7 +50,7 @@ func TestMuxDoesNotCallNonMatchingHandler(t *testing.T) {
 	})
 
 	// when
-	mux.OnMessage(ClientID, strings.NewReader(`{"handlers_test.MsgA": {}}`))
+	mux.OnMessage(ClientID, json.RawMessage(`{"handlers_test.MsgA": {}}`))
 
 	// then
 	assert.That(!matching.WasCalled(), t.Fatalf, "non-matching handler was called")
@@ -65,7 +65,7 @@ func TestMuxDoesNotCallHandlerForInvalidMessage(t *testing.T) {
 	})
 
 	// when
-	mux.OnMessage(ClientID, strings.NewReader(`{{{`))
+	mux.OnMessage(ClientID, json.RawMessage(`{{{`))
 
 	// then
 	assert.That(!capt.WasCalled(), t.Fatalf, "inner handler was unexpectedly called")
@@ -80,7 +80,7 @@ func TestMuxDoesNotCallHandlerForANonObjectMessage(t *testing.T) {
 	})
 
 	// when
-	mux.OnMessage(ClientID, strings.NewReader(`[1, 2, 3]`))
+	mux.OnMessage(ClientID, json.RawMessage(`[1, 2, 3]`))
 
 	// then
 	assert.That(!capt.WasCalled(), t.Fatalf, "inner handler was unexpectedly called")
@@ -95,7 +95,7 @@ func TestMuxDoesNotCallHandlerForAMultipleFieldObjectMessage(t *testing.T) {
 	})
 
 	// when
-	mux.OnMessage(ClientID, strings.NewReader(`{"handlers_test.MsgA": {}, "handlers_test.MsgB": {}}`))
+	mux.OnMessage(ClientID, json.RawMessage(`{"handlers_test.MsgA": {}, "handlers_test.MsgB": {}}`))
 
 	// then
 	assert.That(!capt.WasCalled(), t.Fatalf, "inner handler was unexpectedly called")
@@ -110,7 +110,7 @@ func TestMuxIgnoresMessageWithUnknownTag(t *testing.T) {
 	})
 
 	// when
-	mux.OnMessage(ClientID, strings.NewReader(`{"handlers_test.MsgC": {}}`))
+	mux.OnMessage(ClientID, json.RawMessage(`{"handlers_test.MsgC": {}}`))
 
 	// then
 	assert.That(!capt.WasCalled(), t.Fatalf, "inner handler was unexpectedly called")

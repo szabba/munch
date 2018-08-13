@@ -5,9 +5,8 @@
 package handlers_test
 
 import (
+	"encoding/json"
 	"fmt"
-	"io"
-	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -56,10 +55,7 @@ func TestSocketPassesClientMessageToHandler(t *testing.T) {
 	gomock.InOrder(
 		subsMock.EXPECT().Subscribe(clientID, gomock.Any()),
 		onMsgMock.EXPECT().OnMessage(clientID, gomock.Any()).
-			Do(func(_ munch.ClientID, r io.Reader) {
-				bs, _ := ioutil.ReadAll(r)
-				send <- string(bs)
-			}),
+			Do(func(_ munch.ClientID, msg json.RawMessage) { send <- string(msg) }),
 		subsMock.EXPECT().Unsubscribe(clientID))
 
 	conn, err := connect(srv)
@@ -67,12 +63,12 @@ func TestSocketPassesClientMessageToHandler(t *testing.T) {
 	defer conn.Close()
 
 	// when
-	err = conn.WriteMessage(websocket.TextMessage, []byte("msg"))
+	err = conn.WriteMessage(websocket.TextMessage, []byte("{}"))
 	assertNoError(t, err)
 	msgGot = <-send
 
 	// then
-	assert.That(msgGot == "msg", t.Errorf, "handler got message %q, want %q", msgGot, "msg")
+	assert.That(msgGot == "{}", t.Errorf, "handler got message %q, want %q", msgGot, "{}")
 }
 
 func TestSocketLetsTheSubscriptionServiceSendMessagesToTheClient(t *testing.T) {

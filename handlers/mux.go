@@ -5,9 +5,7 @@
 package handlers
 
 import (
-	"bytes"
 	"encoding/json"
-	"io"
 	"log"
 	"reflect"
 
@@ -28,9 +26,9 @@ func NewMux(hs map[reflect.Type]OnMessager) *Mux {
 
 var _ OnMessager = new(Mux)
 
-func (mux *Mux) OnMessage(id munch.ClientID, r io.Reader) {
+func (mux *Mux) OnMessage(id munch.ClientID, msg json.RawMessage) {
 
-	tag, inner, ok := mux.decodeInnerMessage(id, r)
+	tag, inner, ok := mux.decodeInnerMessage(id, msg)
 	if !ok {
 		return
 	}
@@ -41,23 +39,20 @@ func (mux *Mux) OnMessage(id munch.ClientID, r io.Reader) {
 		return
 	}
 
-	h.OnMessage(id, bytes.NewReader(inner))
+	h.OnMessage(id, inner)
 }
 
-func (mux *Mux) decodeInnerMessage(id munch.ClientID, r io.Reader) (string, json.RawMessage, bool) {
+func (mux *Mux) decodeInnerMessage(id munch.ClientID, tagged json.RawMessage) (string, json.RawMessage, bool) {
 	msg := make(map[string]json.RawMessage)
-	cp := new(bytes.Buffer)
-	dec := json.NewDecoder(io.TeeReader(r, cp))
-
-	err := dec.Decode(&msg)
+	err := json.Unmarshal(tagged, &msg)
 	if err != nil {
-		log.Printf("client %s sent invalid message: %s: %s", id, err, cp.Bytes())
+		log.Printf("client %s sent invalid message: %s: %s", id, err, tagged)
 		return "", nil, false
 	}
 
 	tag, inner, ok := mux.splitInnerMessage(msg)
 	if !ok {
-		log.Printf("client %s sent invalid message: %s", id, cp.Bytes())
+		log.Printf("client %s sent invalid message: %s", id, tagged)
 		return "", nil, false
 	}
 	return tag, inner, true

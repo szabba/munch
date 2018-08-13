@@ -5,6 +5,7 @@
 package handlers
 
 import (
+	"encoding/json"
 	"io"
 	"log"
 	"net/http"
@@ -25,7 +26,7 @@ type SubscriptionService interface {
 }
 
 type OnMessager interface {
-	OnMessage(id munch.ClientID, r io.Reader)
+	OnMessage(id munch.ClientID, msg json.RawMessage)
 }
 
 type MessageFormatter interface {
@@ -74,7 +75,13 @@ func (h *Socket) readLoop(id munch.ClientID, conn *websocket.Conn) {
 			log.Printf("client %s read error: %s", id, err)
 			return
 		}
-		h.onMsg.OnMessage(id, r)
+		var msg json.RawMessage
+		err = json.NewDecoder(r).Decode(&msg)
+		if err != nil {
+			log.Printf("client %s sent invalid message: %s", id, err)
+			break
+		}
+		h.onMsg.OnMessage(id, msg)
 	}
 }
 

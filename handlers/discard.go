@@ -5,7 +5,7 @@
 package handlers
 
 import (
-	"io"
+	"encoding/json"
 
 	"github.com/szabba/munch"
 )
@@ -16,4 +16,4 @@ func Discard() OnMessager {
 
 type discard struct{}
 
-func (_ discard) OnMessage(_ munch.ClientID, _ io.Reader) {}
+func (_ discard) OnMessage(_ munch.ClientID, _ json.RawMessage) {}

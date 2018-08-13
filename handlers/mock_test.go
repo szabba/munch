@@ -5,9 +5,9 @@
 package handlers_test
 
 import (
+	json "encoding/json"
 	gomock "github.com/golang/mock/gomock"
 	munch "github.com/szabba/munch"
-	io "io"
 	reflect "reflect"
 )
 
@@ -78,7 +78,7 @@ func (m *MockOnMessager) EXPECT() *MockOnMessagerMockRecorder {
 }
 
 // OnMessage mocks base method
-func (m *MockOnMessager) OnMessage(arg0 munch.ClientID, arg1 io.Reader) {
+func (m *MockOnMessager) OnMessage(arg0 munch.ClientID, arg1 json.RawMessage) {
 	m.ctrl.Call(m, "OnMessage", arg0, arg1)
 }
 
