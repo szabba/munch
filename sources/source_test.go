@@ -17,6 +17,8 @@ import (
 	"github.com/szabba/munch/sources"
 )
 
+const SleepTime time.Duration = 100 * time.Millisecond
+
 func TestSourceClosesInputWhenClosed(t *testing.T) {
 	// given
 	in, inWriter := io.Pipe()
@@ -59,10 +61,10 @@ func TestSourceCopiesAllInputToParserWhenAllowedTo(t *testing.T) {
 	g := new(run.Group)
 	g.Add(
 		src.Process,
-		func(_ error) { time.Sleep(time.Second); src.Close() })
+		func(_ error) { time.Sleep(SleepTime); src.Stop() })
 	g.Add(
 		func() error { _, err := io.Copy(buf, outReader); return err },
-		func(_ error) { time.Sleep(time.Second); outReader.Close() })
+		func(_ error) { time.Sleep(SleepTime); outReader.Close() })
 
 	// when
 	g.Add(
@@ -93,7 +95,7 @@ func TestSourceClosesUpWhenTheInputGetsExhausted(t *testing.T) {
 
 	// when
 	g.Add(
-		func() error { time.Sleep(time.Second); return inWriter.Close() },
+		func() error { time.Sleep(SleepTime); return inWriter.Close() },
 		func(_ error) {})
 	g.Run()
 
@@ -117,7 +119,7 @@ func TestSourceClosesUpWhenTheParserRefusesFurtherInput(t *testing.T) {
 	g.Add(
 		func() error {
 			var err error
-			time.Sleep(time.Second)
+			time.Sleep(SleepTime)
 			_, err = io.WriteString(inWriter, "some input")
 			return err
 		},
