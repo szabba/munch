@@ -27,7 +27,7 @@ func TestSourceClosesInputWhenClosed(t *testing.T) {
 	src := sources.New(in, out)
 
 	// when
-	src.Close()
+	src.Stop()
 
 	// then
 	n, err := io.WriteString(inWriter, "123")
@@ -43,7 +43,7 @@ func TestSourceClosesParserWhenClosed(t *testing.T) {
 	src := sources.New(in, out)
 
 	// when
-	src.Close()
+	src.Stop()
 
 	// then
 	allOut, _ := ioutil.ReadAll(outReader)
@@ -88,7 +88,7 @@ func TestSourceClosesUpWhenTheInputGetsExhausted(t *testing.T) {
 	g := new(run.Group)
 	g.Add(
 		src.Process,
-		func(_ error) { src.Close() })
+		func(_ error) { src.Stop() })
 	g.Add(
 		func() error { _, err := io.Copy(buf, outReader); return err },
 		func(_ error) { outReader.Close() })
@@ -115,7 +115,7 @@ func TestSourceClosesUpWhenTheParserRefusesFurtherInput(t *testing.T) {
 	g := new(run.Group)
 	g.Add(
 		src.Process,
-		func(_ error) { src.Close() })
+		func(_ error) { src.Stop() })
 	g.Add(
 		func() error {
 			var err error

@@ -45,9 +45,8 @@ func (src *Source) copy(w io.Writer, r io.Reader) error {
 	return err
 }
 
-func (src *Source) Close() error {
+func (src *Source) Stop() {
 	src.once.Do(src.close)
-	return nil
 }
 
 func (src *Source) close() {
