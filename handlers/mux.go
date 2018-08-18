@@ -10,6 +10,7 @@ import (
 	"reflect"
 
 	"github.com/szabba/munch"
+	"github.com/szabba/munch/tagjson"
 )
 
 type Mux struct {
@@ -27,9 +28,9 @@ func NewMux(hs map[reflect.Type]OnMessager) *Mux {
 var _ OnMessager = new(Mux)
 
 func (mux *Mux) OnMessage(id munch.ClientID, msg json.RawMessage) {
-
-	tag, inner, ok := mux.decodeInnerMessage(id, msg)
-	if !ok {
+	tag, inner, err := tagjson.Untag(msg)
+	if err != nil {
+		log.Printf("client %s sent invalid message: %s", id, msg)
 		return
 	}
 
@@ -40,33 +41,4 @@ func (mux *Mux) OnMessage(id munch.ClientID, msg json.RawMessage) {
 	}
 
 	h.OnMessage(id, inner)
-}
-
-func (mux *Mux) decodeInnerMessage(id munch.ClientID, tagged json.RawMessage) (string, json.RawMessage, bool) {
-	msg := make(map[string]json.RawMessage)
-	err := json.Unmarshal(tagged, &msg)
-	if err != nil {
-		log.Printf("client %s sent invalid message: %s: %s", id, err, tagged)
-		return "", nil, false
-	}
-
-	tag, inner, ok := mux.splitInnerMessage(msg)
-	if !ok {
-		log.Printf("client %s sent invalid message: %s", id, tagged)
-		return "", nil, false
-	}
-	return tag, inner, true
-}
-
-func (mux *Mux) splitInnerMessage(msg map[string]json.RawMessage) (string, json.RawMessage, bool) {
-	if len(msg) != 1 {
-		return "", nil, false
-	}
-
-	for tag, in := range msg {
-		return tag, in, true
-	}
-
-	// Unreachable.
-	return "", nil, false
 }
